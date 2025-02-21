@@ -1,5 +1,6 @@
 results/
 refs/
+temp/
 samples/
 .nextflow*
 .nextflow/
