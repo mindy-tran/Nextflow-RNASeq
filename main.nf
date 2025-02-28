@@ -4,7 +4,7 @@ include {EXTRACT_ENSEMBL} from './modules/extract_ensembl'
 include {STAR_INDEX} from './modules/star'
 include {STAR_ALIGN} from './modules/star_align'
 include {MULTIQC} from './modules/multiqc'
-
+include {VERSE} from './modules/verse'
 
 workflow {
 
@@ -23,14 +23,21 @@ workflow {
     STAR_ALIGN(STAR_INDEX.out.index, align_ch)
     
     // Collect all FASTQC and STAR log outputs
-    multiqc_ch = FASTQC.out.zip.mix(STAR_ALIGN.out.log).flatten().collect()
+    multiqc_ch = STAR_ALIGN.out.log.mix(FASTQC.out.zip).flatten().collect()
 
     MULTIQC(multiqc_ch)
-    
+
+    // Run VERSE on each BAM file
+    // Collect BAM files from STAR_ALIGN output and feed into VERSE
+    bam_files_ch = STAR_ALIGN.out.bam.map { it.bam }
+    VERSE(bam_files_ch, gtf_channel)
+
+    // Run concatenation
+    CONCAT_COUNTS(VERSE.out)
 }
 
 
-
+// Notes to self:
 // add container to all processes: like container 'ghcr.io/bf528/fastqc:latest'
 // FastQC: ghcr.io/bf528/fastqc:latest
 

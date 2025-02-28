@@ -12,8 +12,8 @@ process STAR_ALIGN {
     
 
     output:
-    path "*.bam", emit: bam
-    path "*.Log.final.out", emit: log
+    path "*bam", emit: bam
+    path "*Log.final.out", emit: log
 
     script:
     """

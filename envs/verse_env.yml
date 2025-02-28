@@ -1,0 +1,6 @@
+channels:
+- conda-forge
+- bioconda 
+
+dependencies:
+- verse=1.0.5
