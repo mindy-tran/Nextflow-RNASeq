@@ -11,7 +11,7 @@ process STAR_INDEX {
     path(annotation)
 
     output:
-    path "star_index/"
+    path "star_index", emit: index
 
     script:
     """

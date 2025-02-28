@@ -12,6 +12,7 @@ process FASTQC {
     output:
     // tuple val(sample), path('*.zip'), emit: zip
     path('*.html'), emit: html
+    path('*.zip'), emit: zip
 
     script:
     """
