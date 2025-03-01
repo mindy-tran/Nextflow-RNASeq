@@ -7,15 +7,15 @@ process VERSE {
     conda "envs/verse_env.yml"
 
     input:
-    path(bam_file)  // BAM file
-    path(annotation)  // GTF annotation file
+    tuple val(sample), path(bam)  // BAM file
+    path(annotation) // GTF annotation file
 
 
     output:
-    path "*txt"  // Output quantification file
+    path "*"  // Output quantification file
 
     script:
     """
-    verse -a $annotation -o counts.txt -S $bam_file
+    verse -a $annotation -o ${sample} -S $bam
     """
 }

@@ -5,6 +5,7 @@ include {STAR_INDEX} from './modules/star'
 include {STAR_ALIGN} from './modules/star_align'
 include {MULTIQC} from './modules/multiqc'
 include {VERSE} from './modules/verse'
+include {CONCAT_COUNTS} from './modules/concat'
 
 workflow {
 
@@ -14,12 +15,14 @@ workflow {
     fastqc_channel = align_ch
     .flatMap { sample, files -> files.collect { file -> tuple(sample, file) } }
 
-    gtf_channel = Channel.of(["gencode_v45", file(params.annotation)])    
+    gtf_channel = Channel.of(["gencode_v45", file(params.annotation)])   
 
+    // Performing quality control
     FASTQC(fastqc_channel)
+
+    // get ensembl names and STAR aligning reads to the genome
     EXTRACT_ENSEMBL(gtf_channel)
     STAR_INDEX(params.genome, params.annotation)
-
     STAR_ALIGN(STAR_INDEX.out.index, align_ch)
     
     // Collect all FASTQC and STAR log outputs
@@ -28,12 +31,20 @@ workflow {
     MULTIQC(multiqc_ch)
 
     // Run VERSE on each BAM file
-    // Collect BAM files from STAR_ALIGN output and feed into VERSE
-    bam_files_ch = STAR_ALIGN.out.bam.map { it.bam }
-    VERSE(bam_files_ch, gtf_channel)
+    // Collect BAM files from STAR_ALIGN output and use in VERSE
+    // get name of sample and sample BAM file
+    bam_files_ch = STAR_ALIGN.out.bam.map { bam_path -> 
+                    def sample_name = bam_path.baseName.replaceAll("Aligned.out", "") // Extract sample name
+                    tuple(sample_name, bam_path)
+                    }
+    // bam_files_ch.view()
+    
+    VERSE(bam_files_ch, params.annotation)
 
-    // Run concatenation
-    CONCAT_COUNTS(VERSE.out)
+    // Run concatenation with collected VERSE outputs
+    //VERSE.out.collect().view()
+
+    CONCAT_COUNTS(VERSE.out.collect()) 
 }
 
 
