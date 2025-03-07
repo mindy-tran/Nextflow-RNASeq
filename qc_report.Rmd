@@ -6,10 +6,21 @@ output:
     fig_caption: true
 ---
 ```{r}
+
+# Install fgsea if not already installed
+if (!requireNamespace("fgsea", quietly = TRUE)) {
+    install.packages("BiocManager")
+    BiocManager::install("fgsea")
+}
+
+# Load necessary libraries
+library(fgsea)
+library(msigdbr)
 library(DESeq2)
 library(ggplot2)
 library(dplyr)
 library(tibble)
+library(pheatmap)
 ```
 
 ## Evaluate the QC metrics for the full data
@@ -117,7 +128,12 @@ top10_genes
 
 ### The results from a DAVID or ENRICHR analysis on the significant genes at your chosen padj threshold. Comment in a notebook what results you find most interesting from this analysis.
 
+Many of the significant genes were related to cell development like cell adhesion (4.4E-7 pvalue), extracellular matrix (ECM) (3.7E-10 pvalue), an glycoprotein (3.7E-10 pvalue). This could mean the genes are important in how cells interact with their environment with tissue remodeling, metastasis, or immune responses to disease or treatments.
 
+### RNAseq Quality Control Plots
+The PCA plot indicates that the control and experimental samples have clear clustering and suggests that the experimental condition significantly influences gene expression. There is an experimental outlier that is far from all of the other samples, and could be due to batch effects or other technical issues. PC1 and PC2 also make up a large percentage of variance (86% and 10% respectively) which shows that they capture the major differences between the two conditions. 
+
+Looking at the heatmap, the replicates are clustering together except for the one outlier I noticed in the PCA plot. The experimental outlier clusters with the control samples, so we'd need to check for possible mislabeling, contamination, or batch effects. Overall, this analysis indicates that the data is has clear experimental effects and mostly consistent sample relationships.
 
 ```{r}
 
@@ -126,9 +142,94 @@ top10_genes
 # }
 
 
+# Perform variance-stabilizing transformation
+vsd <- vst(dds, blind=TRUE)
+
+# Extract the normalized counts
+normalized_counts <- assay(vsd)
+
+# PCA plot of PC1 vs PC2
+pca_data <- plotPCA(vsd, intgroup="condition", returnData=TRUE)
+percentVar <- round(100 * attr(pca_data, "percentVar"))
+
+ggplot(pca_data, aes(PC1, PC2, color=condition)) +
+  geom_point(size=3) +
+  xlab(paste0("PC1: ", percentVar[1], "% variance")) +
+  ylab(paste0("PC2: ", percentVar[2], "% variance")) +
+  theme_minimal() +
+  ggtitle("PCA of Samples")
+
+
+######## Heatmap
+
+# Compute Euclidean distance between samples
+sample_dist <- dist(t(assay(vsd)))
+
+# Convert to matrix for heatmap visualization
+sample_dist_matrix <- as.matrix(sample_dist)
+rownames(sample_dist_matrix) <- colnames(vsd)
+colnames(sample_dist_matrix) <- colnames(vsd)
+
+# Generate the heatmap
+pheatmap(sample_dist_matrix, clustering_distance_rows=sample_dist, clustering_distance_cols=sample_dist,
+         main="Sample-to-Sample Distance Matrix")
+
+
+
 ```
 
 
+
+
+```{r}
+
+# Load DESeq2 results
+res <- results(dds, contrast = c("condition", "experimental", "control"))
+
+# Remove NA values
+res <- na.omit(res)
+
+# Create ranked list using the signed -log10(padj) * sign(LFC)
+ranked_genes <- res %>%
+    as.data.frame() %>%
+    filter(!is.na(padj)) %>%
+    arrange(desc(log2FoldChange)) %>%
+    mutate(rank_metric = sign(log2FoldChange) * -log10(padj)) %>%
+    select(rank_metric) %>%
+    deframe()
+
+
+# Ensure gene names are assigned
+names(ranked_genes) <- rownames(res)
+# Remove non-finite values
+ranked_genes <- ranked_genes[is.finite(ranked_genes)]
+
+# Load MSigDB C2 Canonical Pathways
+msigdb_c2 <- msigdbr(species = "Homo sapiens", category = "C2") %>%
+    select(gs_name, gene_symbol)
+
+# Convert to list format for fgsea
+pathways_c2 <- split(msigdb_c2$gene_symbol, msigdb_c2$gs_name)
+
+
+
+############# Run fgsea
+# Run fgsea
+fgsea_results <- fgsea(pathways = pathways_c2, 
+                       stats = ranked_genes, 
+                       minSize = 15, 
+                       maxSize = 500, 
+                       nperm = 10000)  # Increase permutations for robust results
+
+# Filter significant pathways
+fgsea_significant <- fgsea_results %>% filter(padj < 0.05) %>% arrange(padj)
+
+# Display top significant pathways
+print(fgsea_significant %>% select(pathway, padj, NES, size) %>% head(10))
+
+
+
+```
 
 
 
