@@ -1,0 +1,137 @@
+---
+title: "Week 3: RNAseq"
+output:
+  html_document:
+    toc: true
+    fig_caption: true
+---
+```{r}
+library(DESeq2)
+library(ggplot2)
+library(dplyr)
+library(tibble)
+```
+
+## Evaluate the QC metrics for the full data
+
+The sequencing reads show high overall quality, with median Phred scores consistently above Q30 across the read length. While the first 10 base pairs show slightly lower quality scores (ranging from Q26 to Q35), the scores stabilize above Q30 beyond first 10 base pairs and maintain high accuracy even at 100 base pairs. The per-sequence quality distribution confirms that large proportion of reads have high-quality scores, supporting the reliability of our sequencing data. The per-base sequence content suggests some nucleotide composition bias within the first 10 base pairs, but this diminishes by position 12 and the nucleotide distributions remain stable. The GC content distribution follows a normal pattern, suggesting no significant deviations due to contamination or library preparation bias. Adapter content is small, with less than 1% cumulative adapter presence detected, indicating that adapter trimming is likely unnecessary. Overall, our sequencing data is high quality has no major concerns that would impact downstream analysis.
+
+## Filtering the counts matrix
+I filtered out genes with less than 10 counts across all samples. Before filtering, the dataset contained 63,241 genes. After filtering, 27,723 genes remained. The distribution of gene counts before (red) and after (cyan) filtering is shown in the histogram below and shows the removal of low-expression genes.
+
+```{r}
+
+
+# Read the counts matrix
+counts <- read.table("results/concat_counts_matrix.tsv", header = TRUE, sep = "\t", row.names = 1, check.names = FALSE)
+
+# Check the number of genes before filtering
+num_genes_before <- nrow(counts)
+
+# Apply filtering: remove genes that have less than 10 counts across all samples
+filtered_counts <- counts[rowSums(counts) >= 10, ]
+
+# Check the number of genes after filtering
+num_genes_after <- nrow(filtered_counts)
+
+# Report the number of genes before and after filtering
+cat("Number of genes before filtering:", num_genes_before, "\n")
+cat("Number of genes after filtering:", num_genes_after, "\n")
+
+# Plot distribution of gene counts before and after filtering
+before_counts <- rowSums(counts)
+after_counts <- rowSums(filtered_counts)
+
+df <- data.frame(
+  Counts = c(before_counts, after_counts),
+  Status = rep(c("Before Filtering", "After Filtering"), c(length(before_counts), length(after_counts)))
+)
+df$Status <- factor(df$Status, levels = c("Before Filtering", "After Filtering")) # make red in the back and cyan in the front
+
+ggplot(df, aes(x = Counts, fill = Status)) +
+  geom_histogram(bins = 50, alpha = 0.5, position = "identity") +
+  scale_x_log10() + 
+  theme_minimal() +
+  labs(title = "Distribution of Gene Counts Before and After Filtering",
+       subtitle = paste0("Number of genes before filtering: ", num_genes_before, "\n", "Number of genes after filtering: ", num_genes_after),
+       x = "Log10(Counts)", y = "Number of Genes") +
+  theme(legend.position = "top")
+  
+
+```
+
+
+
+
+## Performing differential expression analysis using the filtered counts
+Number of significant genes at padj < 0.001: 405
+
+```{r}
+# DESeq2 requires a counts matrix, column data (sample information), and a formula
+# the counts matrix *must be raw counts*
+# Ensure it's a matrix and preserve row names
+padj_thresh <- 0.001
+count_mat <- as.matrix(filtered_counts)
+
+coldata <- data.frame(
+  condition = c("control", "control", "experimental", "experimental", "experimental", "control"),
+  row.names = colnames(count_mat)  # Ensure row names match count matrix column names
+)
+
+
+# Create DESeq2 dataset
+dds <- DESeqDataSetFromMatrix(countData = count_mat, 
+                              colData = coldata, 
+                              design = ~condition)
+
+# Run DESeq2 normalization and DE analysis
+dds <- DESeq(dds)
+
+# Extract results
+res <- results(dds, alpha = padj_thresh)  # Adjust threshold as needed
+
+###### Significant DEGs ######
+gene_names <- read.table('results/gencode_v45_gene_mapping.txt', header = TRUE, sep = "\t")
+
+# Filter for significant genes
+sig_genes <- res %>%
+  as.data.frame() %>%
+  filter(padj < padj_thresh) %>%
+  rownames_to_column(var = "gene") %>% 
+  arrange(padj)  %>% # genes ranked by padj
+  left_join(gene_names, by=c('gene' = 'Ensembl_ID')) %>%
+  relocate(Gene_Name, .after = gene)
+
+# Choose an appropriate padj threshold and report the number of significant genes at this threshold.
+# Report number of significant genes
+num_sig_genes <- nrow(sig_genes)
+print(paste0("Number of significant genes at padj < ", padj_thresh, ": ", num_sig_genes))
+
+# A table containing the DESeq2 results for the top ten significant genes
+top10_genes <- sig_genes %>%
+  head(10)
+top10_genes
+
+```
+
+
+### The results from a DAVID or ENRICHR analysis on the significant genes at your chosen padj threshold. Comment in a notebook what results you find most interesting from this analysis.
+
+
+
+```{r}
+
+# for (g in sig_genes$Gene_Name){
+#   cat(g, '\n')
+# }
+
+
+```
+
+
+
+
+
+
+
+

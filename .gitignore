@@ -5,3 +5,4 @@ samples/
 .nextflow*
 .nextflow/
 work/
+.Rproj.user
