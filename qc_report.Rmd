@@ -5,7 +5,7 @@ output:
     toc: true
     fig_caption: true
 ---
-```{r}
+```{r echo = T, results = 'hide'}
 
 # Install fgsea if not already installed
 if (!requireNamespace("fgsea", quietly = TRUE)) {
@@ -21,6 +21,8 @@ library(ggplot2)
 library(dplyr)
 library(tibble)
 library(pheatmap)
+library(fgsea)
+library(tidyverse)
 ```
 
 ## Evaluate the QC metrics for the full data
@@ -85,9 +87,10 @@ padj_thresh <- 0.001
 count_mat <- as.matrix(filtered_counts)
 
 coldata <- data.frame(
-  condition = c("control", "control", "experimental", "experimental", "experimental", "control"),
+  condition = c("control", "experimental", "control", "experimental", "experimental", "control"),
   row.names = colnames(count_mat)  # Ensure row names match count matrix column names
 )
+
 
 
 # Create DESeq2 dataset
@@ -113,6 +116,7 @@ sig_genes <- res %>%
   left_join(gene_names, by=c('gene' = 'Ensembl_ID')) %>%
   relocate(Gene_Name, .after = gene)
 
+
 # Choose an appropriate padj threshold and report the number of significant genes at this threshold.
 # Report number of significant genes
 num_sig_genes <- nrow(sig_genes)
@@ -128,7 +132,7 @@ top10_genes
 
 ### The results from a DAVID or ENRICHR analysis on the significant genes at your chosen padj threshold. Comment in a notebook what results you find most interesting from this analysis.
 
-Many of the significant genes were related to cell development like cell adhesion (4.4E-7 pvalue), extracellular matrix (ECM) (3.7E-10 pvalue), an glycoprotein (3.7E-10 pvalue). This could mean the genes are important in how cells interact with their environment with tissue remodeling, metastasis, or immune responses to disease or treatments.
+Many of the significant genes were related to cell development like cell adhesion (4.4E-7 pvalue), extracellular matrix (ECM) (3.7E-10 pvalue), and glycoprotein (3.7E-10 pvalue). This could mean the genes are important in how cells interact with their environment with tissue remodeling, metastasis, or immune responses to disease or treatments.
 
 ### RNAseq Quality Control Plots
 The PCA plot indicates that the control and experimental samples have clear clustering and suggests that the experimental condition significantly influences gene expression. There is an experimental outlier that is far from all of the other samples, and could be due to batch effects or other technical issues. PC1 and PC2 also make up a large percentage of variance (86% and 10% respectively) which shows that they capture the major differences between the two conditions. 
@@ -159,7 +163,12 @@ ggplot(pca_data, aes(PC1, PC2, color=condition)) +
   theme_minimal() +
   ggtitle("PCA of Samples")
 
+```
 
+
+
+
+```{r}
 ######## Heatmap
 
 # Compute Euclidean distance between samples
@@ -175,62 +184,108 @@ pheatmap(sample_dist_matrix, clustering_distance_rows=sample_dist, clustering_di
          main="Sample-to-Sample Distance Matrix")
 
 
-
 ```
 
 
+
+
+
+
+### FGSEA Analysis
+I am seeing pathways related to breast cancer (HUPER_BREAST_BASAL_VS_LUMINAL_UP, SCHUETZ_BREAST_CANCER_DUCTAL_INVASIVE_UP, NABA_MATRISOME_POORLY_METASTATIC_BREAST_CANCER) and the extracellular matrix (REACTOME_ASSEMBLY_OF_COLLAGEN_FIBRILS_AND_OTHER_MULTIMERIC_STRUCTURES, REACTOME_EXTRACELLULAR_MATRIX_ORGANIZATION). This makes me wonder if this analysis is hinting at something in breast cancer cells and the tumor progression.
 
 
 ```{r}
-
 # Load DESeq2 results
 res <- results(dds, contrast = c("condition", "experimental", "control"))
+labeled_results <- rownames_to_column(res %>% as.data.frame(), 'Ensembl_ID')
+id2gene_path <- '/projectnb/bf528/students/mindyt5/project-1-mindy-tran/results/gencode_v45_gene_mapping.txt'
+gmt_file_path <- '/projectnb/bf528/students/mindyt5/project-1-mindy-tran/refs/c2.all.v2024.1.Hs.symbols.gmt'
+min_size <- 5
+max_size <- 500
 
-# Remove NA values
-res <- na.omit(res)
-
-# Create ranked list using the signed -log10(padj) * sign(LFC)
-ranked_genes <- res %>%
-    as.data.frame() %>%
-    filter(!is.na(padj)) %>%
-    arrange(desc(log2FoldChange)) %>%
-    mutate(rank_metric = sign(log2FoldChange) * -log10(padj)) %>%
-    select(rank_metric) %>%
-    deframe()
-
-
-# Ensure gene names are assigned
-names(ranked_genes) <- rownames(res)
-# Remove non-finite values
-ranked_genes <- ranked_genes[is.finite(ranked_genes)]
-
-# Load MSigDB C2 Canonical Pathways
-msigdb_c2 <- msigdbr(species = "Homo sapiens", category = "C2") %>%
-    select(gs_name, gene_symbol)
-
-# Convert to list format for fgsea
-pathways_c2 <- split(msigdb_c2$gene_symbol, msigdb_c2$gs_name)
+make_ranked_log2fc <- function(labeled_results, id2gene_path) {
+  #first load in the id2gene.txt appropriately
+  id2gene <- read_delim(id2gene_path, col_names = c('Ensembl_ID', 'Gene_Name'))
+  
+  # join to add a new column in your labeled results that matches IDs to symbols
+  labeled_results <- labeled_results %>% 
+    left_join(id2gene, by='Ensembl_ID') %>%
+    arrange(desc(log2FoldChange)) %>% # log2FC values in descending order
+    drop_na()
+  
+  # generate a named vector of symbols
+  result <- labeled_results$log2FoldChange
+  names(result) <- labeled_results$Gene_Name
+  
+  return(result)
+}
 
 
+run_fgsea <- function(gmt_file_path, rnk_list, min_size, max_size) {
+  # load GMT file
+  pathways <- fgsea::gmtPathways(gmt_file_path)
+  
+  # Run fgsea and make tibble of results
+  result <- fgsea::fgsea(
+    pathways = pathways,
+    stats = rnk_list,
+    minSize = min_size,
+    maxSize = max_size
+  )
+  result <- as_tibble(result)
+  
+  return(result)
+}
 
-############# Run fgsea
-# Run fgsea
-fgsea_results <- fgsea(pathways = pathways_c2, 
-                       stats = ranked_genes, 
-                       minSize = 15, 
-                       maxSize = 500, 
-                       nperm = 10000)  # Increase permutations for robust results
+top_pathways <- function(fgsea_results, num_paths){
+  # get top twenty pathways ranked by positive and negative NES
+  top_positive <- fgsea_results %>%
+    arrange(desc(NES)) %>%
+    head(num_paths) %>%  # Get top positive pathways
+    mutate(top_NES = "pos")  # Add category
+  
+  top_negative <- fgsea_results %>%
+    arrange(NES) %>%
+    head(num_paths) %>%  # Get top negative pathways
+    mutate(top_NES = "neg")  # Add category
+  
+  # Combine top positive and negative results
+  top_results <- bind_rows(top_positive, top_negative)
+  top_results$pathway <- gsub("_"," ", top_results$pathway)
+  
+  
+  # Create the bar plot
+  g <- ggplot(top_results, aes(x = reorder(stringr::str_wrap(pathway, 70), NES), y = NES, fill = top_NES)) +
+    geom_bar(stat = "identity", show.legend = FALSE) +
+    coord_flip() + # flip coordinates
+    labs(title = "fgsea results for Hallmark MSigDB gene se",
+         x = NULL,  
+         y = "Normalized Enrichment Score (NES)",
+         fill = "NES Category") +
+    theme_minimal() +
+    scale_fill_manual(values = c("pos" = "lightblue", "neg" = "pink")) +
+    theme(
+      axis.text = element_text(size = 6)
+    )
+  
+  return(g)
+}
 
-# Filter significant pathways
-fgsea_significant <- fgsea_results %>% filter(padj < 0.05) %>% arrange(padj)
-
-# Display top significant pathways
-print(fgsea_significant %>% select(pathway, padj, NES, size) %>% head(10))
 
 
+# Main
+ranked_list <- make_ranked_log2fc(labeled_results, id2gene_path)
+fgsea_results <- run_fgsea(gmt_file_path, ranked_list, min_size, max_size)
 
+padj_thresh <- 0.01
+top_fgsea <- fgsea_results %>%
+  filter(padj < padj_thresh) %>%
+  arrange(desc(NES))  # Sort by enrichment score
+
+# plot top 10 pathways
+top_pathways(top_fgsea, num_paths = 10)
 ```
-
 
 
 
