@@ -9,3 +9,9 @@
 - MultiQC: Performing post-alignment QC
 
 - VERSE: Quantifying alignments to the genome
+
+- R:
+  * Filtered out genes with less than 10 counts across all samples for the raw counts matrix
+  * Perform basic differential expression using DESeq2
+  * RNAseq Quality Control Plots: sample-to-sample heatmap and PCA plots to compare control vs experimental
+  * FGSEA Analysis using the C2 canonical pathways MSIGDB dataset
