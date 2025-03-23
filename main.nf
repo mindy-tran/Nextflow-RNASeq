@@ -65,26 +65,3 @@ workflow {
 // conda activate nextflow_base
 // nextflow run main.nf -profile singularity,cluster
 // /projectnb/bf528/students/mindyt5/project-1-mindy-tran
-
-
-/*
-(nextflow_base)[mindyt5@scc-wi1 project-1-mindy-tran]$ nextflow run main.nf -profile singularity,cluster
-Nextflow 24.10.4 is available - Please consider updating your version to it
-
- N E X T F L O W   ~  version 24.04.2
-
-Launching `main.nf` [disturbed_payne] DSL2 - revision: 87d1fd1441 
-executor >  sge (14)
-[27/70a73a] FASTQC (4)          | 12 of 12 ✔
-[e8/94f709] EXTRACT_ENSEMBL (1) | 1 of 1 ✔
-[94/e640b4] STAR_INDEX          | 1 of 1 ✔
-
-Completed at: 27-Feb-2025 16:25:10
-Duration    : 40m 25s
-CPU hours   : 9.5
-Succeeded   : 14
-
-
-
-nextflow run main.nf -resume 15374610-c825-4c2d-9c8a-2536fd82e673
-*/
