@@ -1,5 +1,9 @@
 # RNASeq
-Created a Nextflow pipeline to explore published bulk RNAseq data using R, Python, and Linux to automate quality control, alignment, quantification, differential expression analysis, and gene set enrichment analysis
+Created a Nextflow pipeline to explore published bulk RNAseq data using R, Python, and Linux to automate quality control, alignment, quantification, differential expression analysis, and gene set enrichment analysis.
+
+Reproduced figures 3C and 3F from:
+Chandra, V., Ibrahim, H., Halliez, C. et al. The type 1 diabetes gene TYK2 regulates β-cell development and its responses to interferon-α. Nat Commun 13, 6363 (2022). https://doi.org/10.1038/s41467-022-34069-z
+
 ## Objectives
 
 - FASTQC: Performing quality control
