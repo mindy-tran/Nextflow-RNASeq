@@ -1,5 +1,5 @@
 # RNASeq
-•	Creating a Nextflow pipeline to explore published bulk RNAseq data using R, Python, and Linux to automate quality control, alignment, quantification, differential expression analysis, and gene set enrichment analysis
+Created a Nextflow pipeline to explore published bulk RNAseq data using R, Python, and Linux to automate quality control, alignment, quantification, differential expression analysis, and gene set enrichment analysis
 ## Objectives
 
 - FASTQC: Performing quality control
