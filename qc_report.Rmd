@@ -9,6 +9,7 @@ output:
     fig_caption: true
 ---
 ```{r echo = TRUE, results = 'hide', message = FALSE, warning = FALSE}
+setwd("/projectnb/bf528/students/mindyt5/project-1-mindy-tran")
 
 # Install fgsea if not already installed
 if (!requireNamespace("fgsea", quietly = TRUE)) {
@@ -185,7 +186,21 @@ colnames(sample_dist_matrix) <- colnames(vsd)
 pheatmap(sample_dist_matrix, clustering_distance_rows=sample_dist, clustering_distance_cols=sample_dist,
          main="Sample-to-Sample Distance Matrix")
 
+######### 
+sampleDists <- dist(t(assay(vsd)))
 
+library("RColorBrewer")
+library('pheatmap')
+sampleDistMatrix <- as.matrix(sampleDists)
+rownames(sampleDistMatrix) <- paste(vsd$condition, vsd$type, sep="-") # format sample-replicate names
+colnames(sampleDistMatrix) <- NULL
+colors <- colorRampPalette( rev(brewer.pal(9, "Blues")) )(255)
+
+pheatmap(sampleDistMatrix,
+         main="Version 2: Sample-to-Sample Distance Matrix",
+         clustering_distance_rows=sampleDists,
+         clustering_distance_cols=sampleDists,
+         col=colors)
 ```
 
 
@@ -261,7 +276,7 @@ top_pathways <- function(fgsea_results, num_paths){
   g <- ggplot(top_results, aes(x = reorder(stringr::str_wrap(pathway, 70), NES), y = NES, fill = top_NES)) +
     geom_bar(stat = "identity", show.legend = FALSE) +
     coord_flip() + # flip coordinates
-    labs(title = "fgsea results for Hallmark MSigDB gene se",
+    labs(title = "fgsea results for Hallmark MSigDB gene set",
          x = NULL,  
          y = "Normalized Enrichment Score (NES)",
          fill = "NES Category") +
@@ -459,14 +474,16 @@ It shows the GC content distribution across all reads and helps us identify cont
 
 **2b. Make an interpretation of this plot assuming the data type was RNASeq.**
 There is some overrepresented sequence with the peaks at x=75-95, indicating contamination from another organism or rRNA since the peak is fairly broad. I would also say there is an over-represented sequence since there is a sharper peak on the normal distribution at x=39.
-
+- We have many reads in the high forties but many in the high GC content
+- they could be adapter sequences that still needs to be trimmed off
+- rRNA that has not been depleted
+- overall, there are two distinct populations with very different GC content
 
 
 
 **2c. Do you think this plot indicates there was a problem with the dataset?**
 **Explain your answer.**
 Yes, I think there is a problem because I see a wide, broad peak around x=75-95, it could indicate contamination from another organism. There is also a shifted GC content peak from the normal, expected distribution, so there may be rRNA contamination as well.
-
 
 
 
@@ -480,7 +497,6 @@ Outline:
 3. After filtering out contaminating sequences, look at the GC content distribution again to see if the peak at x=39 changes to a more expected pattern.
 
 
-
 **3. What is a splice-aware aligner? When is it important to use a splice-aware aligner?**
 Splice aware aligners use knowledge of splice junctions and exon/intron structure to better map reads. It's important to always use a splice-aware aligner for RNAseq against a reference genome because we want more accurate mapping. Genes encoded in DNA have exons and introns, and with added complexity from alternative splicing, contigs can be from different exons spliced together. Splice-aware
 aligners help us map more accurately.
@@ -490,7 +506,7 @@ aligners help us map more accurately.
 
 **4. What does a “gene-level” count as produced by VERSE or any other counting tool in a RNAseq experiment represent?**
 
-The gene-level counts give a general quantification of gene expression rather than counting individual transcripts. It's the total number of reads mapped to a gene where the reads align to any of a gene's exons.
+The gene-level counts give a general quantification of gene expression rather than counting individual transcripts. It's the total number of reads mapped to a gene where the reads align to any of a gene's exons. Formally, it is the sum of the union of all the exon accounts.
 
 
 
@@ -554,7 +570,6 @@ If they all inhibit inflammation, then my interpretation does change. I would sa
 I am the most concerned about this because a large portion of the reads align to multiple locations in the genome, and this indicates issues with repetitive sequences or contamination. If I saw this, I would be very worried about the quality of my count matrix and how accurate the quantification of gene expression was, and I would not do downstream analyses.
 
 
-
 *2. 15% of reads have identical sequences*
 
 I am very concerned about having a high percentage of identical reads because it could indicate PCR duplication or contamination and could skew the gene expression quantification, ultimately influencing our interpretation of differential expression results downstream. 
@@ -565,7 +580,8 @@ If I saw a trend of low PHRED scores at the end of reads, I'd be concerned about
 
 *4. 10% of reads are unmapped after alignment to the appropriate genome*
 
-I do expect some nmapped reads, but 10% unmapped could imply contamination, sequencing errors, or issues with the reference genome. Since I can filter these reads out, I am concerned but not  immensely concerened.
+I do expect some unmapped reads, but 10% unmapped could imply contamination, sequencing errors, or issues with the reference genome. Since I can filter these reads out, I am concerned but not immensely concerened. 
+Other notes: Having 90% mapping is amazing, so 10% unmapped reads is not concerning at all. Mapping can be around 70%, so 90% mapping is great.
 
 
 *5. Non-random nucleotide distribution in the first 6 bases*
@@ -575,6 +591,7 @@ I am not as concerened about this as the other things since this is common (bias
 *6. Unequal Read Lengths*
 
 If I saw that the read lengths were highly variable, I'd think it suggests sequencing errors. But, modern aligners can often handle variable-length reads, making this less concerning compared to the issues I ranked higher.
+Other notes: When you get sequencing data, it should be the same. Unequal read lengths mean something wrong happened in sequencing.
 
 *7. Nucleotide frequencies of A, C, T, and G are not equal over the entire read*
 
@@ -583,7 +600,7 @@ I would expect not to not be equal, so this is not concerning. While extreme imb
 *8. Unequal number of forward and reverse reads*
 
 This is not concerning as long as the unqueal number is not extreme and both pairs are present. While paired-end sequencing typically produces equal numbers of forward and reverse reads, minor differences can occur due to things like sequencing errors.
-
+Other notes: This means there is some error with sequencing core, we expect to have the same number of reads since they are paired. We cannot fix this with trimming.
 
 
 
